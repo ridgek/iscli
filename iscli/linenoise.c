@@ -330,6 +330,71 @@ static void freeCompletions(linenoiseCompletions *lc) {
         free(lc->cvec);
 }
 
+/* Display possible completions in rows and columns. */
+static void displayCompletions(struct linenoiseState *ls,
+                               linenoiseCompletions *lc)
+{
+    size_t line, lines, col, cols;
+    size_t width = 0;
+    size_t i;
+
+    for (i = 0; i < lc->len; i++) {
+        size_t len = strlen(lc->cvec[i]);
+        if (len > width)
+            width = len;
+    }
+
+    /* How many entries can be put on one line */
+    cols = ls->cols / (width + 1);
+    if (cols == 0)
+        cols = 1;
+
+    /* How many lines of output, rounded up */
+    lines = (lc->len + cols - 1) / cols;
+
+    /* On the ith line print elements i, i+lines, i+lines *2, etc. */
+    for (line = 0; line < lines; line++) {
+        for (col = 0; col < cols; col++) {
+            i = line + col * lines;
+            if (i >= lc->len)
+                break;
+            (void) printf("%s%-*s", col == 0 ? "" : " ",
+                          (int) width, lc->cvec[i]);
+        }
+        (void) printf("\n");
+    }
+}
+
+/* Find the longest common prefix of the completions. */
+static char *completionsCommonPrefix(linenoiseCompletions *lc)
+{
+    size_t max_equal, which, i;
+    char *prevstr;
+    char *prefix = NULL;
+
+    if (lc->len < 2)
+        return NULL;
+
+    prevstr = lc->cvec[0];
+    max_equal = strlen(prevstr);
+    for (which = 1; which < lc->len; which++) {
+        for (i = 0; i < max_equal && prevstr[i] == lc->cvec[which][i]; i++)
+            continue;
+        max_equal = i;
+    }
+
+    if (max_equal > 0) {
+        prefix = malloc(sizeof(char*)*(max_equal + 1));
+        if (prefix) {
+            strncpy(prefix, lc->cvec[0], max_equal);
+            prefix[max_equal] = '\0';
+        }
+    }
+
+    return prefix;
+}
+
+
 /* This is an helper function for linenoiseEdit() and is called when the
  * user types the <tab> key in order to complete the string currently in the
  * input.
@@ -338,55 +403,53 @@ static void freeCompletions(linenoiseCompletions *lc) {
  * structure as described in the structure definition. */
 static int completeLine(struct linenoiseState *ls) {
     linenoiseCompletions lc = { 0, NULL };
-    int nread, nwritten;
     char c = 0;
+    char *text;
+    size_t textlen;
 
-    completionCallback(ls->buf,&lc);
+    /* Look for the start of the last word */
+    text = strrchr(ls->buf,' ');
+    if (text) {
+        text++;  /* Skip space */
+        textlen = ls->buflen - ((size_t)text - (size_t)ls->buf);
+    } else {
+        text = ls->buf;
+        textlen = ls->buflen;
+    }
+
+    completionCallback(ls->buf,text,&lc);
     if (lc.len == 0) {
         linenoiseBeep();
+    } else if (lc.len == 1) {
+        /* Found an exact match. Add a space after it */
+        snprintf(text,textlen,"%s ",lc.cvec[0]);
+        ls->len = ls->pos = strnlen(ls->buf,ls->buflen);
+        refreshLine(ls);
     } else {
-        size_t stop = 0, i = 0;
+        char *prefix;
 
-        while(!stop) {
-            /* Show completion or original buffer */
-            if (i < lc.len) {
-                struct linenoiseState saved = *ls;
+        /* See if there is a common prefix of the completions */
+        prefix = completionsCommonPrefix(&lc);
+        if (prefix) {
+            snprintf(text,textlen,"%s",prefix);
+            ls->len = ls->pos = strnlen(ls->buf,ls->buflen);
+            free(prefix);
+            refreshLine(ls);
 
-                ls->len = ls->pos = strlen(lc.cvec[i]);
-                ls->buf = lc.cvec[i];
-                refreshLine(ls);
-                ls->len = saved.len;
-                ls->pos = saved.pos;
-                ls->buf = saved.buf;
-            } else {
-                refreshLine(ls);
-            }
-
-            nread = read(ls->ifd,&c,1);
-            if (nread <= 0) {
+            /* Don't display completions unless the user hits the tab key
+             * again */
+            if (read(ls->ifd, &c, 1) <= 0) {
                 freeCompletions(&lc);
                 return -1;
             }
+        }
 
-            switch(c) {
-                case 9: /* tab */
-                    i = (i+1) % (lc.len+1);
-                    if (i == lc.len) linenoiseBeep();
-                    break;
-                case 27: /* escape */
-                    /* Re-show original buffer */
-                    if (i < lc.len) refreshLine(ls);
-                    stop = 1;
-                    break;
-                default:
-                    /* Update buffer and return */
-                    if (i < lc.len) {
-                        nwritten = snprintf(ls->buf,ls->buflen,"%s",lc.cvec[i]);
-                        ls->len = ls->pos = nwritten;
-                    }
-                    stop = 1;
-                    break;
-            }
+        if (c == 0 || c == TAB) {
+            /* New line, left edge */
+            (void) write(STDOUT_FILENO,"\n\x1b[0G",5);
+            displayCompletions(ls, &lc);
+            refreshLine(ls);
+            c = 0; /* Clear tab */
         }
     }
 
