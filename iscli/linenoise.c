@@ -111,6 +111,7 @@
 #define LINENOISE_MAX_LINE 4096
 static char *unsupported_term[] = {"dumb","cons25","emacs",NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
+static linenoiseDescribeCallback *describeCallback = NULL;
 
 static struct termios orig_termios; /* In order to restore at exit.*/
 static int rawmode = 0; /* For atexit() function to check if restore is needed*/
@@ -417,6 +418,15 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, const char *str) {
     lc->cvec = cvec;
     lc->cvec[lc->len++] = copy;
 }
+
+
+/* =========================== Describe ===================================== */
+
+/* Register a callback function to be called for ? help. */
+void linenoiseSetDescribeCallback(linenoiseDescribeCallback *fn) {
+    describeCallback = fn;
+}
+
 
 /* =========================== Line editing ================================= */
 
@@ -852,6 +862,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
             }
             break;
         default:
+            if (c == '?' && describeCallback) {
+                /* New line, left edge */
+                (void) write(STDOUT_FILENO,"?\n\x1b[0G",6);
+                disableRawMode(STDIN_FILENO);
+                describeCallback(l.buf);
+                if (enableRawMode(STDIN_FILENO) == -1) return -1;
+                refreshLine(&l);
+                break;
+            }
             if (linenoiseEditInsert(&l,c)) return -1;
             break;
         case CTRL_U: /* Ctrl+u, delete the whole line. */
