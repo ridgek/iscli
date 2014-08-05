@@ -8,7 +8,7 @@ import logging
 
 ffi = cffi.FFI()
 
-_root = os.path.abspath(os.path.dirname(__file__))
+_root = os.path.relpath(os.path.dirname(__file__))
 ffi.cdef('void free(void *ptr);')
 with open(os.path.join(_root, 'linenoise_ffi.h')) as header:
     ffi.cdef(header.read())
