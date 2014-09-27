@@ -4,17 +4,17 @@ from StringIO import StringIO
 
 from nose.tools import assert_in, assert_not_in
 
-from iscli.cli import Cli
+from iscli.cli import CommandSet, Cli
 
 
-test_cli = Cli()
+testcmd = CommandSet()
 
 
 DESC_SHOW = 'Show running system information'
 DESC_SHOW_SYSTEM = 'System properties'
 
 
-@test_cli.install(
+@testcmd.install(
     'show system',
     [DESC_SHOW,
      DESC_SHOW_SYSTEM]
@@ -23,7 +23,7 @@ def _cmd_show_system(cli, args):
     cli.out('System ok')
 
 
-@test_cli.install(
+@testcmd.install(
     'show version',
     [DESC_SHOW,
      'Software version']
@@ -33,7 +33,7 @@ def _cmd_show_version(cli, args):
     cli.out('Version 1.0')
 
 
-@test_cli.install(
+@testcmd.install(
     'test range <1-10>',
     ['Test command',
      'Test range',
@@ -43,7 +43,7 @@ def _cmd_test_range(cli, args):
     cli.out('test range')
 
 
-@test_cli.install(
+@testcmd.install(
     'test opt (bar|)',
     ['Test command',
      'Test optional',
@@ -53,7 +53,7 @@ def _cmd_test_opt(cli, args):
     cli.out('test opt')
 
 
-@test_cli.install(
+@testcmd.install(
     'test vararg .WORD',
     ['Test command',
      'Test vararg',
@@ -63,9 +63,9 @@ def _cmd_test_vararg(cli, args):
     cli.out('test vararg')
 
 
-@test_cli.install(
+@testcmd.install(
     ('sshfs HOSTNAME username USERNAME ({path PATH | port <1-65535>}|)'),
-    ['Manage ATMF feature',
+    ['Manage SSHFS',
      'A.B.C.D, X:X::X:X or host name',
      'SSH Username',
      'Username',
@@ -79,18 +79,22 @@ def _cmd_sshfs_mount(cli, args):
 
 
 class TestCli(object):
+    def __init__(self):
+        self.cli = Cli()
+        self.cli.load(testcmd)
+
     def capture(self):
-        test_cli.stdout = StringIO()
-        return test_cli.stdout
+        self.cli.stdout = StringIO()
+        return self.cli.stdout
 
     def describe(self, cmd):
         cap = self.capture()
-        test_cli.describe(cmd)
+        self.cli.describe(cmd)
         return cap.getvalue()
 
     def command(self, cmd):
         cap = self.capture()
-        test_cli.command(cmd)
+        self.cli.command(cmd)
         return cap.getvalue()
 
     def test_describe(self):
@@ -174,5 +178,6 @@ class TestCli(object):
         assert_in('WORD', self.describe('test vararg foo foo foo 6 '))
         assert_in('<cr>', self.describe('test vararg foo foo foo 6 '))
 
+
 if __name__ == '__main__':
-    test_cli.commandloop()
+    TestCli().cli.commandloop()

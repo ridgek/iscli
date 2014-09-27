@@ -8,22 +8,72 @@ from .node import cmdsplit, make_root
 from . import linenoise
 
 
+class CommandSet(object):
+    def __init__(self):
+        self.commands = {}
+        self._on_load = None
+
+    def add(self, fn, cmdspec, desc, **options):
+        self.commands[cmdspec] = ((fn, cmdspec, desc), options)
+
+    def install(self, cmdspec, desc=None, **options):
+        """A decorator to install a command into the CommandSet.
+
+        :param cmdspec: command specification
+        :param desc: sequence of help text
+        """
+        def decorator(fn):
+            self.add(fn, cmdspec, desc, **options)
+            return fn
+        return decorator
+
+    def on_load(self, fn):
+        """A decorator to set a callback to be run when this CommandSet
+        is loaded by a Cli
+
+        The callback is passed one argument, the Cli object.
+        """
+        self._on_load = fn
+        return fn
+
+    def load_into(self, cli):
+        """Load this CommandSet into a Cli."""
+        for args, options in self.commands.itervalues():
+            cli.register(*args, **options)
+
+        if self._on_load:
+            self._on_load(cli)
+
+
 class Cli(object):
-    def __init__(self, prompt='>'):
+    def __init__(self, prompt='>', command_sets=None):
         self.root = make_root()
         self.prompt = prompt
 
         self.stdout = sys.stdout
 
+        for command_set in (command_sets or []):
+            self.load(command_set)
+
     def out(self, *objects, **kwargs):
         kwargs['file'] = self.stdout
         return print(*objects, **kwargs)
 
-    def register(self, cmdspec, fn, desc=None):
-        """Register a command.
+    def load(self, command_set):
+        """Load a CommandSet of commands into this Cli."""
+        old_root = self.root
+        try:
+            command_set.load_into(self)
+        except Exception:
+            # Try recover the tree to a good state
+            self.root = old_root
+            raise
 
-        :param cmdspec: command specification
+    def register(self, fn, cmdspec, desc, **options):
+        """Register a command into this Cli.
+
         :param fn: function to register
+        :param cmdspec: command specification
         :param desc: sequence of help text
         """
         root = make_root()
@@ -31,17 +81,6 @@ class Cli(object):
         root.build(elements, fn)
         root.merge(self.root)
         self.root = root
-
-    def install(self, cmdspec, desc=None):
-        """A decorator to register a command.
-
-        :param cmdspec: command specification
-        :param desc: sequence of help text
-        """
-        def decorator(fn):
-            self.register(cmdspec, fn, desc)
-            return fn
-        return decorator
 
     def expand(self, command, extra=False):
         """Expand a command into a dictionary of possible matches.
