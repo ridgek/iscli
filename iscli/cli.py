@@ -3,7 +3,7 @@ from __future__ import print_function
 import shlex
 import sys
 
-
+from .exceptions import ExitLoop
 from .node import cmdsplit, make_root
 from . import linenoise
 
@@ -166,7 +166,7 @@ class Cli(object):
 
         Example::
 
-            >foo b?
+            >use b?
               bar   Pour a drink
               broom Sweep the floor
         """
@@ -232,10 +232,17 @@ class Cli(object):
                 line = linenoise.linenoise(self.prompt).strip()
             except EOFError:
                 break
-            if line and line[-1] == '?':
-                self.describe(line.rstrip('?'))
-            elif line:
-                linenoise.history_add(line)
-                self.command(line)
-            else:
+
+            if not line:
                 self.emptyline()
+                continue
+
+            if line[-1] == '?':
+                self.describe(line.rstrip('?'))
+                continue
+
+            linenoise.history_add(line)
+            try:
+                self.command(line)
+            except ExitLoop:
+                break
