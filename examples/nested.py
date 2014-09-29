@@ -10,7 +10,6 @@ conf_commands = CommandSet()
 @commands.install('enable')
 def cmd_enable(cli, args):
     cli.enable_mode.commandloop()
-    cli.init_linenoise()
 
 
 @enable_commands.install('disable')
@@ -26,7 +25,6 @@ def cmd_show_system(cli, args):
 @enable_commands.install('configure terminal')
 def cmd_configure_terminal(cli, args):
     cli.conf_mode.commandloop()
-    cli.init_linenoise()
 
 
 @enable_commands.install('exit')

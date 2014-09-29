@@ -221,13 +221,13 @@ class Cli(object):
             else:
                 self.error_unrecognized(line)
 
-    def init_linenoise(self):
+    def init_line_editor(self):
         linenoise.set_describe_callback(self.describe)
         linenoise.set_completion_callback(self.complete)
 
     def commandloop(self):
-        self.init_linenoise()
         while True:
+            self.init_line_editor()
             try:
                 line = linenoise.linenoise(self.prompt).strip()
             except EOFError:
