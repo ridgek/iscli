@@ -358,10 +358,10 @@ static void displayCompletions(struct linenoiseState *ls,
             i = line + col * lines;
             if (i >= lc->len)
                 break;
-            (void) printf("%s%-*s", col == 0 ? "" : " ",
-                          (int) width, lc->cvec[i]);
+            printf("%s%-*s", col == 0 ? "" : " ",
+                   (int) width, lc->cvec[i]);
         }
-        (void) printf("\n");
+        printf("\r\n");
     }
 }
 
@@ -446,7 +446,10 @@ static int completeLine(struct linenoiseState *ls) {
 
         if (c == 0 || c == TAB) {
             /* New line, left edge */
-            (void) write(STDOUT_FILENO,"\n\x1b[0G",5);
+            if (write(STDOUT_FILENO,"\n\x1b[0G",5)) {
+                freeCompletions(&lc);
+                return -1;
+            }
             displayCompletions(ls, &lc);
             refreshLine(ls);
             c = 0; /* Clear tab */
@@ -927,7 +930,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
         default:
             if (c == '?' && describeCallback) {
                 /* New line, left edge */
-                (void) write(STDOUT_FILENO,"?\n\x1b[0G",6);
+                if (write(STDOUT_FILENO,"?\n\x1b[0G",6) == -1) return -1;
                 disableRawMode(STDIN_FILENO);
                 describeCallback(l.buf);
                 if (enableRawMode(STDIN_FILENO) == -1) return -1;
