@@ -187,17 +187,23 @@ class Cli(object):
                     self.error_ambiguous(line)
                     return
 
-        print_cr = False
-        for c, nodes in sorted(commands.iteritems()):
-            node = nodes[-1]
+        def row(c, node):
+            # (sort_order, keyword, description)
             if node.fn and extra and c == command:
-                print_cr = True
-                continue
-            desc = node.element.desc
-            self.out('  %s\t%s' % (c[-1], desc))
+                return (1, '<cr>', '')
+            return (0, c[-1], node.element.desc)
 
-        if print_cr:
-            self.out('  <cr>')
+        rows = [
+            r[1:]  # chop sort key
+            for r in sorted([
+                row(c, nodes[-1])
+                for c, nodes in commands.iteritems()
+            ])
+        ]
+        pad = max((len(c) for c, _ in rows))
+
+        for c, desc in rows:
+            self.out('    %s    %s' % (c.ljust(pad), desc))
         self.out()
 
     def command(self, line):
